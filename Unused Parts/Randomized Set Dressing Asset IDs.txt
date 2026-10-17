@@ -1,0 +1,24 @@
+Rubble Rocks L 01
+- Low Spawn
+- Prefer Edges
+
+Rubble Pebbles Spread Out
+- High Frequency
+- Grid Pattern w/ Variation
+- Random Rotation applied
+
+Rubble Rocks Spreadout 01
+- Low Spawn
+- Random Rot(-12 to 12)
+- Random Height(.1 to .5)
+
+Mushroom Patch(Forest) 03
+- height: .4
+- Very rare spawn
+
+Root 02
+- small
+
+Root 03
+- medium
+- Corner

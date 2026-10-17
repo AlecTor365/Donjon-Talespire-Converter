@@ -1,0 +1,29 @@
+{
+    "tileSets" : { 
+        "MegaDungeon" : {
+            "ASSET_IDS" : {
+                "floor": "940d013f-c982-43e7-922a-0317cc1c74db", 
+                "portcullis": "fcb7a2fe-4b79-4d0a-b1fd-31e4b17ffaf5", 
+                "door": "3151e230-bac7-401e-8fa8-b993bbee17ea", 
+                "wall_straight": "c8312af8-8bfb-41e1-bb6e-30280686b168", 
+                "wall_corner": "0820791e-c1a8-4a1e-b690-f34b0cb276ba", 
+                "solid_block": "0252d209-c23c-4f72-aa8b-51ed0dc09f3a" 
+            },
+            "PREFABS" : { 
+                "Door_Prefab": [ 
+                    { "key": "floor", "x_offset": 0.0, "y_offset": 0.0, "inherits_rotation": false },
+                    { "key": "door", "x_offset": 0.0, "y_offset": 0.5, "inherits_rotation": true } 
+                ], 
+                "Portcullis_Prefab": [ 
+                    { "key": "floor", "x_offset": 0.0, "y_offset": 0.0, "inherits_rotation": false },
+                    { "key": "portcullis", "x_offset": 0.0, "y_offset": 0.5, "inherits_rotation": true } 
+                ],
+                "Solid_Prefab": [ 
+                    { "key": "floor", "x_offset": 0.0, "y_offset": 0.0, "inherits_rotation": false },
+                    { "key": "solid_block", "x_offset": 0.0, "y_offset": 0.5, "inherits_rotation": false },
+                    { "key": "solid_block", "x_offset": 0.0, "y_offset": 1.5, "inherits_rotation": false }
+                ]
+            }
+        }
+    }
+}

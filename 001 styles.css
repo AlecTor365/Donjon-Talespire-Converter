@@ -1,0 +1,63 @@
+body {
+    font-family: sans-serif;
+    background-color: #2b2b2b;
+    color: #ffffff;
+    padding: 20px;
+}
+
+/* The Textarea Styling to match the dark theme */
+textarea {
+    background-color: #1a1a1a;
+    color: #ffffff;
+    border: 1px solid #555;
+    padding: 10px;
+    font-family: monospace;
+    width: 100%;
+    max-width: 600px;
+    margin-bottom: 20px;
+}
+
+#map-grid {
+    display: grid;
+    /* Do not use 'gap' here, it causes sub-pixel blurring! */
+    margin: 20px 0;
+}
+
+.cell {
+    width: 20px;
+    height: 20px;
+    border: 1px solid #222; /* Forces a crisp border on every cell */
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    cursor: crosshair;
+}
+
+/* Colors based on Type */
+.room { background-color: #a8d5ba; }
+.corridor { background-color: #f7e6ad; }
+.wall { background-color: #d1a3a4; }
+.solid { background-color: #333; }
+.door, .locked, .trapped, .secret { background-color: #f3c25b; }
+.portcullis, .arch { background-color: #a3c4d1; }
+
+/* The Arrow Rotations */
+.arrow {
+    font-size: 12px;
+    font-weight: bold;
+    color: black;
+    pointer-events: none; /* Prevents tooltip glitching */
+}
+
+/* Default arrow is ➔ (East) */
+.facing-e { transform: rotate(0deg); }
+.facing-s { transform: rotate(90deg); }
+.facing-w { transform: rotate(180deg); }
+.facing-n { transform: rotate(270deg); }
+
+.facing-se { transform: rotate(45deg); }
+.facing-sw { transform: rotate(135deg); }
+.facing-nw { transform: rotate(225deg); }
+.facing-ne { transform: rotate(315deg); }
