@@ -40,4 +40,4 @@ Here is where I show my work. Anyone who cares enough to read this, I would love
 # Notes
 [^1]: I personally move this into the folder with everything else; but thats just for convinience. 
 [^2]: I use Chrome, and have not tested if this works other places
-[^3]: Currently, things are cramped on purpose, as its how I imagine Dungeons are; but they're also hard to use effectively as a DM. The final product of this will probably be useing the "Big Mode" as the default, and a "Cramped Mode" as the toggle. 
+[^3]: Currently, things are cramped on purpose, as its how I imagine Dungeons are; but they're also hard to use effectively as a DM. The final product of this will probably be using the "Big Mode" as the default, and a "Cramped Mode" as the toggle. 
