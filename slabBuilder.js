@@ -6,40 +6,40 @@
 // x : Left to Right
 // z : -1 = Up, +1 = Down
 
-const ASSET_IDS = { 
-    floor: "940d013f-c982-43e7-922a-0317cc1c74db", 
-    portcullis: "fcb7a2fe-4b79-4d0a-b1fd-31e4b17ffaf5", 
-    door: "3151e230-bac7-401e-8fa8-b993bbee17ea", 
-    wall_straight: "c8312af8-8bfb-41e1-bb6e-30280686b168", 
-    wall_corner: "0820791e-c1a8-4a1e-b690-f34b0cb276ba",
-    outer_corner: "bb8e7378-44da-4556-bac5-92420f766815",
-    solid_block: "0252d209-c23c-4f72-aa8b-51ed0dc09f3a", 
-    stairs : "f4a32f18-e4ce-4dd3-baec-cdd3da36c28e"
-};
+// const ASSET_IDS = { 
+//     floor: "940d013f-c982-43e7-922a-0317cc1c74db", 
+//     portcullis: "fcb7a2fe-4b79-4d0a-b1fd-31e4b17ffaf5", 
+//     door: "3151e230-bac7-401e-8fa8-b993bbee17ea", 
+//     wall_straight: "c8312af8-8bfb-41e1-bb6e-30280686b168", 
+//     wall_corner: "0820791e-c1a8-4a1e-b690-f34b0cb276ba",
+//     outer_corner: "bb8e7378-44da-4556-bac5-92420f766815",
+//     solid_block: "0252d209-c23c-4f72-aa8b-51ed0dc09f3a", 
+//     stairs : "f4a32f18-e4ce-4dd3-baec-cdd3da36c28e"
+// };
 
-const PREFABS = { 
-    "Door_Prefab": [ 
-        { key: "floor", y_bump: 0.0, inherits_rotation: false },
-        { key: "door", y_bump: 0.5, inherits_rotation: true, N: {z : 0.5} , E: {x : -0.5} } 
-    ], 
-    "Portcullis_Prefab": [ 
-        { key: "floor", y_bump: 0.0, inherits_rotation: false },
-        { key: "portcullis", y_bump: 0.5, inherits_rotation: true, N: {z : 0.5} , E: {x : -0.5} } 
-    ],
-    "Solid_Prefab": [ 
-        { key: "floor", y_bump: 0.0, inherits_rotation: false },
-        { key: "solid_block", y_bump: 0.5, inherits_rotation: false },
-        { key: "solid_block", y_bump: 1.5, inherits_rotation: false }
-    ],
-    "outer_corner_Prefab": [ 
-    { key: "floor", y_bump: 0.0, inherits_rotation: false },
-    { key: "outer_corner", y_bump: 0.5, inherits_rotation: true, NE: {x : -0.5, z : 0.5}, SE: {x : -0.5}, NW: {z: 0.5} }
-    ],
-    "Stairs_Prefab": [ 
-    { key: "floor", y_bump: 0.0, inherits_rotation: false },
-    { key: "stairs", y_bump: 0.5, inherits_rotation: true }
-    ]
-};
+// const PREFABS = { 
+//     "Door_Prefab": [ 
+//         { key: "floor", y_bump: 0.0, inherits_rotation: false },
+//         { key: "door", y_bump: 0.5, inherits_rotation: true, N: {z : 0.5} , E: {x : -0.5} } 
+//     ], 
+//     "Portcullis_Prefab": [ 
+//         { key: "floor", y_bump: 0.0, inherits_rotation: false },
+//         { key: "portcullis", y_bump: 0.5, inherits_rotation: true, N: {z : 0.5} , E: {x : -0.5} } 
+//     ],
+//     "Solid_Prefab": [ 
+//         { key: "floor", y_bump: 0.0, inherits_rotation: false },
+//         { key: "solid_block", y_bump: 0.5, inherits_rotation: false },
+//         { key: "solid_block", y_bump: 1.5, inherits_rotation: false }
+//     ],
+//     "outer_corner_Prefab": [ 
+//     { key: "floor", y_bump: 0.0, inherits_rotation: false },
+//     { key: "outer_corner", y_bump: 0.5, inherits_rotation: true, NE: {x : -0.5, z : 0.5}, SE: {x : -0.5}, NW: {z: 0.5} }
+//     ],
+//     "Stairs_Prefab": [ 
+//     { key: "floor", y_bump: 0.0, inherits_rotation: false },
+//     { key: "stairs", y_bump: 0.5, inherits_rotation: true }
+//     ]
+// };
 
 // TaleSpire uses 24 rotation increments (360/24 = 15 degrees).
 const ROTATIONS = {

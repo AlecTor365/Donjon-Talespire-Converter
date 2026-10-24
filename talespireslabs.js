@@ -1,380 +1,140 @@
 /**
- * Slab Library for TaleSpire.
- *
- * A javascript library for reading and writing TaleSpire slabs.
- *
- * @link   https://github.com/brcoding/TaleSpireHtmlSlabGeneration
- * @file   talespireslabs.js.
- * @author Barry Ruffner.
- * @since  1.0.0
+ * Streamlined TaleSpire v1 Slab Encoder
  */
 
-// Pull in the assets to display names and get asset extents
-var script = document.createElement("script");
-script.src = 'assetdata.js';
-document.head.appendChild(script);
-// Needed for gzip inflate / deflate of paste strings
-var script = document.createElement("script");
-script.src = 'https://cdn.jsdelivr.net/pako/1.0.3/pako.min.js';
-document.head.appendChild(script);
-// Math package for vector math
-var script = document.createElement("script");
-script.src = 'https://cdnjs.cloudflare.com/ajax/libs/mathjs/6.6.4/math.min.js';
-document.head.appendChild(script);
+const TalespireSlabs = (() => {
+  'use strict';
 
-var TalespireSlabs = (function () {
+  // Byte-order mapping to convert a standard 32-char hex UUID string into
+  // Microsoft's mixed-endian 16-byte .NET System.Guid struct layout:
+  // - Bytes 0..3:  reversed (uint32 little-endian)
+  // - Bytes 4..5:  reversed (uint16 little-endian)
+  // - Bytes 6..7:  reversed (uint16 little-endian)
+  // - Bytes 8..15: unchanged (big-endian byte array)
+  const GUID_BYTE_ORDER = [3, 2, 1, 0, 5, 4, 7, 6, 8, 9, 10, 11, 12, 13, 14, 15];
 
-    'use strict';
-    
-    // Any methods or parameters that 
-    var publicAPIs = {};    
-    var outputElement;
+  /**
+   * Converts a UUID string (e.g. "940d013f-c982-43e7-922a-0317cc1c74db")
+   * into a 16-byte Uint8Array arranged in .NET System.Guid binary order.
+   */
+  function uuidToGuidBytes(nguid) {
+    const cleanHex = nguid.replace(/[- ]/g, '');
+    const rawBytes = new Uint8Array(16);
 
-    publicAPIs.GetAsset = function(nguid) {
-        return asset_data[nguid];
+    for (let i = 0; i < 16; i++) {
+      rawBytes[i] = parseInt(cleanHex.slice(i * 2, i * 2 + 2), 16);
     }
 
-    publicAPIs.GetAllAssets = function() {
-        return asset_data;
+    const guidBytes = new Uint8Array(16);
+    for (let i = 0; i < 16; i++) {
+      guidBytes[i] = rawBytes[GUID_BYTE_ORDER[i]];
+    }
+    return guidBytes;
+  }
+
+  /**
+   * Serializes an array of asset layout groups into a TaleSpire clipboard string.
+   *
+   * @param {Array<{nguid: string, assets: Array<{rotation: number, bounds: {center: {x: number, y: number, z: number}, extents: {x: number, y: number, z: number}}}>}>} layouts
+   * @returns {string} Gzip-compressed, Base64-encoded slab wrapped in triple backticks.
+   */
+  function CreateSlab(layouts = []) {
+    // 1. Count total placed assets to allocate the exact binary buffer size needed:
+    //    - 8 bytes:  Slab header (4B magic number + 2B version + 2B layout count)
+    //    - 20 bytes per layout: 16B GUID + 2B asset count + 2B struct alignment padding
+    //    - 28 bytes per asset:  12B center + 12B extents + 1B signed rotation + 3B padding
+    //    - 28 bytes: Overall slab bounding box (12B union center + 12B union extents + 4B padding)
+    let totalAssets = 0;
+    for (let i = 0; i < layouts.length; i++) {
+      totalAssets += layouts[i].assets.length;
     }
 
-    var toHexString = function(byteArray, withDash=false) {
-        if (withDash) {
-            return Array.from(byteArray, function(byte) {
-                return ('0' + (byte & 0xFF).toString(16)).slice(-2);
-            }).join('-')
-        } else {
-            return Array.from(byteArray, function(byte) {
-                return ('0' + (byte & 0xFF).toString(16)).slice(-2);
-            }).join('')            
-        }
+    const totalByteLength = 8 + (layouts.length * 20) + (totalAssets * 28) + 28;
+    const buffer = new ArrayBuffer(totalByteLength);
+    const view = new DataView(buffer);
+    let ptr = 0;
+
+    // 2. Write 8-byte Header (all values little-endian)
+    view.setUint32(ptr, 0xD1CEFACE, true)
+    ptr += 4;
+    view.setUint16(ptr, 1, true);          // Slab format version 1
+    ptr += 2;
+    view.setUint16(ptr, layouts.length, true);
+    ptr += 2;
+
+    // 3. Write Layout Table of Contents (20 bytes per unique asset group)
+    for (let i = 0; i < layouts.length; i++) {
+      const layout = layouts[i];
+      const guidBytes = uuidToGuidBytes(layout.nguid);
+
+      for (let b = 0; b < 16; b++) {
+        view.setUint8(ptr + b, guidBytes[b]);
+      }
+      ptr += 16;
+
+      view.setUint16(ptr, layout.assets.length, true);
+      ptr += 4; // 2 bytes for asset count + 2 bytes of zero padding
     }
 
-    // Convert a hex string to a byte array
-    var hexToBytes = function(hex) {
-        for (var bytes = [], c = 0; c < hex.length; c += 2)
-        bytes.push(parseInt(hex.substr(c, 2), 16));
-        return bytes;
+    // 4. Write Individual Asset Placements (28 bytes each) & Track Global Bounding Box
+    let minX = Infinity, minY = Infinity, minZ = Infinity;
+    let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+
+    for (let i = 0; i < layouts.length; i++) {
+      const assets = layouts[i].assets;
+
+      for (let j = 0; j < assets.length; j++) {
+        const asset = assets[j];
+        const center = asset.bounds.center;
+        const extents = asset.bounds.extents;
+
+        // Center (X, Y, Z) - 12 bytes
+        view.setFloat32(ptr, center.x, true);
+        view.setFloat32(ptr + 4, center.y, true);
+        view.setFloat32(ptr + 8, center.z, true);
+        ptr += 12;
+
+        // Extents / Half-Size (X, Y, Z) - 12 bytes
+        view.setFloat32(ptr, extents.x, true);
+        view.setFloat32(ptr + 4, extents.y, true);
+        view.setFloat32(ptr + 8, extents.z, true);
+        ptr += 12;
+
+        // Rotation - 1 signed byte (-12 to +12 in 15-degree steps) + 3 bytes of zero padding
+        view.setInt8(ptr, asset.rotation);
+        ptr += 4;
+
+        // Expand global Axis-Aligned Bounding Box (AABB)
+        if (center.x - extents.x < minX) minX = center.x - extents.x;
+        if (center.y - extents.y < minY) minY = center.y - extents.y;
+        if (center.z - extents.z < minZ) minZ = center.z - extents.z;
+
+        if (center.x + extents.x > maxX) maxX = center.x + extents.x;
+        if (center.y + extents.y > maxY) maxY = center.y + extents.y;
+        if (center.z + extents.z > maxZ) maxZ = center.z + extents.z;
+      }
     }
 
-    var roundNumber = function(num) {
-        //return num
-        return num;// Math.round((num + Number.EPSILON) * 100) / 100
+    // 5. Write Overall Slab Bounding Box (24 bytes + 4 trailing zero-padding bytes)
+    if (totalAssets > 0) {
+      view.setFloat32(ptr, 0.5 * (minX + maxX), true);
+      view.setFloat32(ptr + 4, 0.5 * (minY + maxY), true);
+      view.setFloat32(ptr + 8, 0.5 * (minZ + maxZ), true);
+      view.setFloat32(ptr + 12, 0.5 * (maxX - minX), true);
+      view.setFloat32(ptr + 16, 0.5 * (maxY - minY), true);
+      view.setFloat32(ptr + 20, 0.5 * (maxZ - minZ), true);
+    }
+    ptr += 28;
+
+    // 6. Compress with Gzip (pako) and encode to Base64 wrapped in triple backticks
+    const gzBytes = pako.gzip(buffer);
+    let binaryString = '';
+    for (let i = 0; i < gzBytes.length; i++) {
+      binaryString += String.fromCharCode(gzBytes[i]);
     }
 
-    var nguidHexToBytes = function(nguid) {
-        var b = hexToBytes(nguid);
-        //console.log("Hex to Bytes: " + b);
-        // rearrange bytes into bin format (smarter ways but brute force works fine)
-        return [b[3], b[2], b[1], b[0], b[5], b[4], b[7], b[6], b[8], 
-                b[9], b[10], b[11], b[12], b[13], b[14], b[15]]
-    }
+    return '```' + btoa(binaryString) + '```';
+  }
 
-    publicAPIs.CreateSlab = function(layouts=[]) { 
-        // Create a large ArrayBuffer and DataView, We can slice what we don't need at the end.
-        var buffer = new ArrayBuffer(Math.pow(2, 20));
-        var bufferDataView = new DataView(buffer);
-
-        // Write header
-        var bufPtr = 0;
-        // Write Magic Numbers
-        bufferDataView.setUint32(0, 3520002766, true);
-        bufPtr += 4;
-        bufferDataView.setUint16(bufPtr, 1, true);
-        bufPtr += 2;
-
-        // Write layout count        
-        bufferDataView.setUint16(bufPtr, layouts.length, true);
-        bufPtr += 2;
-        //01c3a210-94fb-449f-8c47-993eda3e7126
-        layouts.forEach(function(layout){ 
-            nguidHexToBytes(layout['nguid'].replace(/[- ]/g, "")).forEach(function(byte) {
-                bufferDataView.setUint8(bufPtr, byte, true);
-                bufPtr += 1;
-            });
-
-            bufferDataView.setUint16(bufPtr, layout['assets'].length, true);
-            bufPtr += 2;
-            // skip unknown
-            bufPtr += 2;
-        });
-        var first = true;
-        var unionMin = [0, 0, 0];
-        var unionMax = [0, 0, 0];
-        layouts.forEach(function(layout){ 
-            // Write asset locations
-            layout['assets'].forEach(function(asset) {
-                //console.log(asset);
-                bufferDataView.setFloat32(bufPtr, asset['bounds']['center']['x'], true);
-                bufPtr += 4;
-                bufferDataView.setFloat32(bufPtr, asset['bounds']['center']['y'], true);
-                bufPtr += 4;
-                bufferDataView.setFloat32(bufPtr, asset['bounds']['center']['z'], true);
-                bufPtr += 4;
-                bufferDataView.setFloat32(bufPtr, asset['bounds']['extents']['x'], true);
-                bufPtr += 4;
-                bufferDataView.setFloat32(bufPtr, asset['bounds']['extents']['y'], true);
-                bufPtr += 4;
-                bufferDataView.setFloat32(bufPtr, asset['bounds']['extents']['z'], true);
-                bufPtr += 4;
-                
-                bufferDataView.setUint8(bufPtr, asset['rotation'], true);
-                bufPtr += 4;
-                //console.log(math.subtract([10, 12, 14], [1, 1, 1]));
-                var centerVector3 = [asset['bounds']['center']['x'], asset['bounds']['center']['y'], asset['bounds']['center']['z']]
-                var extentsVector3 = [asset['bounds']['extents']['x'], asset['bounds']['extents']['y'], asset['bounds']['extents']['z']]
-                
-                if (first) {
-                    first = false;
-                    unionMin = math.subtract(centerVector3, extentsVector3);
-                    unionMax = math.add(centerVector3, extentsVector3);
-                }
-
-                var min = math.subtract(centerVector3, extentsVector3);
-                var max = math.add(centerVector3, extentsVector3);
-                
-                unionMin[0] = Math.min(min[0], unionMin[0]);
-                unionMin[1] = Math.min(min[1], unionMin[1]);
-                unionMin[2] = Math.min(min[2], unionMin[2]);
-                
-                unionMax[0] = Math.max(max[0], unionMax[0]);
-                unionMax[1] = Math.max(max[1], unionMax[1]);
-                unionMax[2] = Math.max(max[2], unionMax[2]);
-                //console.log(unionMin, unionMax);
-
-            });
-        });
-        var unionCenterVector3 = math.multiply(0.5, math.add(unionMin, unionMax))
-        var unionExtentsVector3 = math.multiply(0.5, math.subtract(unionMax, unionMin))
-        // unionCenterVector3[0] = 1;
-        // unionCenterVector3[2] = 1;
-
-        bufferDataView.setFloat32(bufPtr, unionCenterVector3[0], true);
-        bufPtr += 4;
-        bufferDataView.setFloat32(bufPtr, unionCenterVector3[1], true);
-        bufPtr += 4;
-        bufferDataView.setFloat32(bufPtr, unionCenterVector3[2], true);
-        bufPtr += 4;
-        bufferDataView.setFloat32(bufPtr, unionExtentsVector3[0], true);
-        bufPtr += 4;
-        bufferDataView.setFloat32(bufPtr, unionExtentsVector3[1], true);
-        bufPtr += 4;
-        bufferDataView.setFloat32(bufPtr, unionExtentsVector3[2], true);
-        bufPtr += 4;
-        bufPtr += 4;
-
-        var gzdata        = pako.gzip(buffer.slice(0, bufPtr));        
-
-        return '```' + btoa(String.fromCharCode.apply(null, gzdata)) + '```';
-    }
-
-    var ReadSlab = function(data, getpayload=false) {
-        var results = "";
-        var decodedAssets = [];
-        var bufPtr = 0;
-        console.log("Magic Header: " + new Uint32Array(data.buffer.slice(bufPtr, bufPtr + 4))[0]);
-        bufPtr += 4;
-        console.log("Second Magic: " + new Uint16Array(data.buffer.slice(bufPtr, bufPtr + 2))[0]);
-        bufPtr += 2;
-        var num_layouts = new Uint16Array(data.buffer.slice(bufPtr, bufPtr + 2))[0];
-        bufPtr += 2;
-        console.log("Number of Layouts: " + num_layouts);
-
-        var totalAssets = 0;
-        // Loop over every layout and decode
-        for (var i = 0; i < num_layouts; i++) {
-            //console.log(new Int8Array(data.buffer.slice(bufPtr, bufPtr + 16)));
-            var ng_a1 = new Int8Array(data.buffer.slice(bufPtr, bufPtr + 1));
-            bufPtr += 1;
-            var ng_a2 = new Int8Array(data.buffer.slice(bufPtr, bufPtr + 1));
-            bufPtr += 1;
-            var ng_a3 = new Int8Array(data.buffer.slice(bufPtr, bufPtr + 1));
-            bufPtr += 1;
-            var ng_a4 = new Int8Array(data.buffer.slice(bufPtr, bufPtr + 1));
-            bufPtr += 1;
-
-
-            var ng_b1 = new Int8Array(data.buffer.slice(bufPtr, bufPtr + 1));
-            bufPtr += 1;
-            var ng_b2 = new Int8Array(data.buffer.slice(bufPtr, bufPtr + 1));
-            bufPtr += 1;
-
-
-            var ng_c1 = new Int8Array(data.buffer.slice(bufPtr, bufPtr + 1));
-            bufPtr += 1;
-            var ng_c2 = new Int8Array(data.buffer.slice(bufPtr, bufPtr + 1));
-            bufPtr += 1;
-
-
-            var ng_d = new Uint8Array(data.buffer.slice(bufPtr, bufPtr + 1));
-            bufPtr += 1;
-            var ng_e = new Uint8Array(data.buffer.slice(bufPtr, bufPtr + 1));
-            bufPtr += 1;
-            var ng_f = new Uint8Array(data.buffer.slice(bufPtr, bufPtr + 1));
-            bufPtr += 1;
-            var ng_g = new Uint8Array(data.buffer.slice(bufPtr, bufPtr + 1));
-            bufPtr += 1;
-            var ng_h = new Uint8Array(data.buffer.slice(bufPtr, bufPtr + 1));
-            bufPtr += 1;
-            var ng_i = new Uint8Array(data.buffer.slice(bufPtr, bufPtr + 1));
-            bufPtr += 1;
-            var ng_j = new Uint8Array(data.buffer.slice(bufPtr, bufPtr + 1));
-            bufPtr += 1;
-            var ng_k = new Uint8Array(data.buffer.slice(bufPtr, bufPtr + 1));
-            bufPtr += 1;
-
-            var hexNguid = toHexString(ng_a4) + toHexString(ng_a3) + toHexString(ng_a2) + toHexString(ng_a1) +
-                        "-" + toHexString(ng_b2) + toHexString(ng_b1) + "-" +
-                        toHexString(ng_c2) + toHexString(ng_c1) + "-" +
-                        toHexString(ng_d) + toHexString(ng_e) + "-" +
-                        toHexString(ng_f) + toHexString(ng_g) + toHexString(ng_h) + 
-                        toHexString(ng_i) + toHexString(ng_j) + toHexString(ng_k)
-            console.log(hexNguid);
-            var assetCount = new Uint16Array(data.buffer.slice(bufPtr, bufPtr + 2))[0];
-            bufPtr += 2;
-            decodedAssets.push({"nguid": hexNguid, "assetCount": assetCount})
-            totalAssets += assetCount;
-            // Skip terminator for struct
-            //var unknown = new Uint16Array(data.buffer.slice(bufPtr, bufPtr + 2))[0];
-            bufPtr += 2;
-            //console.log("unknown: " + unknown);
-        }
-        console.log("Total Asset Count: " + totalAssets);
-        results += "<p>Total Asset Count: " + totalAssets + "</p>";
-        var AssetLocations = [];
-        
-        for (i = 0; i < totalAssets; i++) {
-            // Each AssetCopyData is 28 bytes
-            var centerVector3 = new DataView(data.buffer.slice(bufPtr, bufPtr + 12))
-            var centerX = centerVector3.getFloat32(0, true);
-            var centerY = centerVector3.getFloat32(4, true);
-            var centerZ = centerVector3.getFloat32(8, true);
-            bufPtr += 12
-            var extentsVector3 = new DataView(data.buffer.slice(bufPtr, bufPtr + 12))
-            var extentsX = extentsVector3.getFloat32(0, true);
-            var extentsY = extentsVector3.getFloat32(4, true);
-            var extentsZ = extentsVector3.getFloat32(8, true);
-            bufPtr += 12
-
-            var rotation = new Uint8Array(data.buffer.slice(bufPtr, bufPtr + 1))[0];
-            bufPtr += 4;
-            // printResults("Asset Rotation: " + rotation);            
-            // printResults("Center X: " + centerX + " Y: " + centerY + " Z: " + centerZ);
-            // printResults("Extents X: " + extentsX + " Y: " + extentsY + " Z: " + extentsZ);
-
-            AssetLocations.push({"rotation": rotation, "centerX": centerX, "centerY": centerY, "centerZ": centerZ, "extentsX": extentsX, "extentsY": extentsY, "extentsZ": extentsZ})
-        }
-
-        var unionCenter = [0, 0, 0];
-        var unionExtents = [0, 0, 0];
-        var centerVector3 = new DataView(data.buffer.slice(bufPtr, bufPtr + 12))
-        unionCenter[0] = centerVector3.getFloat32(0, true);
-        unionCenter[1] = centerVector3.getFloat32(4, true);
-        unionCenter[2] = centerVector3.getFloat32(8, true);
-        bufPtr += 12
-        var extentsVector3 = new DataView(data.buffer.slice(bufPtr, bufPtr + 12))
-        unionExtents[0] = extentsVector3.getFloat32(0, true);
-        unionExtents[1] = extentsVector3.getFloat32(4, true);
-        unionExtents[2] = extentsVector3.getFloat32(8, true);
-        bufPtr += 12
-        console.log("Union Center: " + JSON.stringify(unionCenter));
-        console.log("Union Extents: " + JSON.stringify(unionExtents));
-        var payload = []
-        var assetIdx = 0;
-        for (i = 0; i < decodedAssets.length; i++) {
-            var asset = publicAPIs.GetAsset(decodedAssets[i]["nguid"]);
-            if (asset) {
-                results += "<p><b>" + asset["name"] + "</b><br> NGuid: " + decodedAssets[i]["nguid"] + "</p>";
-            } else {
-                results += "<p><b>NGuid:</b> " + decodedAssets[i]["nguid"] + "</p>";
-            }
-            var assetCount = decodedAssets[i]["assetCount"];
-            var payloadAssets = [];
-            for (var x = 0; x < assetCount; x++) {
-                payloadAssets.push(
-                    {
-                        'rotation': AssetLocations[assetIdx]["rotation"],
-                        'bounds': {
-                            'center': {'x': AssetLocations[assetIdx]["centerX"], 'y': AssetLocations[assetIdx]["centerY"], 'z': AssetLocations[assetIdx]["centerZ"]},
-                            'extents': {'x': AssetLocations[assetIdx]["extentsX"], 'y': AssetLocations[assetIdx]["extentsY"], 'z': AssetLocations[assetIdx]["extentsZ"]},
-                        }
-                    });
-
-                results += "<pre><b style='margin-left: 15px'>Rotation</b>: " + AssetLocations[assetIdx]["rotation"];
-                results += "<br><b style='margin-left: 15px'>Center</b> X: " + roundNumber(AssetLocations[assetIdx]["centerX"], 4) + 
-                    " Y: " + roundNumber(AssetLocations[assetIdx]["centerY"], 4) + 
-                    " Z: " + roundNumber(AssetLocations[assetIdx]["centerZ"], 4) + 
-                    " <b>Extents</b> X: " + roundNumber(AssetLocations[assetIdx]["extentsX"], 4) + 
-                    " Y: " + roundNumber(AssetLocations[assetIdx]["extentsY"], 4) + 
-                    " Z: " + roundNumber(AssetLocations[assetIdx]["extentsZ"], 4) + "</pre>";
-                assetIdx++;
-            }
-            payload.push({'nguid': decodedAssets[i]["nguid"], 'assets': payloadAssets})
-        }
-        if (getpayload) {
-            return payload;
-        } else {
-            return results;            
-        }
-    }
-
-    publicAPIs.DecodeSlab = function(paste) {
-        if (paste.length == 0) {
-            throw "Unable to read slab."
-        }
-        paste = paste.replace(/[` ]/g, "")
-
-        // Decode base64 (convert ascii to binary)
-        var strData     = atob(paste);
-        if (strData.length == 0) {
-            throw "Unable to process paste. Base64 decode returned empty results."
-        }
-        // Convert binary string to character-number array
-        var charData    = strData.split('').map(function(x){return x.charCodeAt(0);});
-
-        // Turn number array into byte-array
-        var binData = new Uint8Array(charData);
-
-        var data;
-        try {
-        // Pako magic
-            data = pako.inflate(binData);
-        } catch {
-            throw "Unable to inflate gzip contents. Cannot read slab."
-        }
-
-        return ReadSlab(data);
-    }
-
-    publicAPIs.DecodeSlabToPayload = function(paste) {
-        if (paste.length == 0) {
-            throw "Unable to read slab."
-        }
-
-        paste = paste.replace(/[` ]/g, "")
-
-        // Decode base64 (convert ascii to binary)
-        var strData     = atob(paste);
-        if (strData.length == 0) {
-            throw "Unable to process paste. Base64 decode returned empty results."
-        }
-        // Convert binary string to character-number array
-        var charData    = strData.split('').map(function(x){return x.charCodeAt(0);});
-
-        // Turn number array into byte-array
-        var binData = new Uint8Array(charData);
-
-        var data;
-        try {
-        // Pako magic
-            data = pako.inflate(binData);
-        } catch {
-            throw "Unable to inflate gzip contents. Cannot read slab."
-        }
-
-        return ReadSlab(data, true);
-    }
-
-    return publicAPIs;
+  return { CreateSlab };
 })();
-

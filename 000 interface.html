@@ -12,6 +12,10 @@
     <input type="file" id="jsonFileInput" accept=".json, .txt">
     <button id="uploadButton">Generate TaleSpire Slab</button>
 
+    <label for="tileSetDropdown">Select TileSet:</label>
+    <select id="tileSetDropdown">
+    </select>
+
     <div>
         <h3>Your TaleSpire String:</h3>
         <textarea id="outputArea" rows="10" readonly placeholder="Your generated string will appear here..."></textarea>
@@ -25,8 +29,9 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/pako/1.0.3/pako.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/6.6.4/math.min.js"></script>
 
+
+    <script src="themePicker.js"></script>
     <script src="talespireslabs.js"></script> 
     <script src="donjonParser.js"></script>  
     <script src="slabBuilder.js"></script>   
