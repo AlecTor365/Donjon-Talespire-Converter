@@ -11,30 +11,7 @@ const tileSets =  {
             solid_block: "0252d209-c23c-4f72-aa8b-51ed0dc09f3a", 
             stairs : "f4a32f18-e4ce-4dd3-baec-cdd3da36c28e"
         },
-        PREFABS : { 
-            "Door_Prefab": [ 
-                { key: "floor", y_bump: 0.0, inherits_rotation: false },
-                { key: "door", y_bump: 0.5, inherits_rotation: true, N: {z : 0.5} , E: {x : -0.5} } 
-            ], 
-            "Portcullis_Prefab": [ 
-                { key: "floor", y_bump: 0.0, inherits_rotation: false },
-                { key: "portcullis", y_bump: 0.5, inherits_rotation: true, N: {z : 0.5} , E: {x : -0.5} } 
-            ],
-            "Solid_Prefab": [ 
-                { key: "floor", y_bump: 0.0, inherits_rotation: false },
-                { key: "solid_block", y_bump: 0.5, inherits_rotation: false },
-                { key: "solid_block", y_bump: 1.5, inherits_rotation: false }
-            ],
-            "outer_corner_Prefab": [ 
-            { key: "floor", y_bump: 0.0, inherits_rotation: false },
-            { key: "outer_corner", y_bump: 0.5, inherits_rotation: true, NE: {x : -0.5, z : 0.5}, SE: {x : -0.5}, NW: {z: 0.5} }
-            ],
-            "Stairs_Prefab": [ 
-            { key: "floor", y_bump: 0.0, inherits_rotation: false },
-            { key: "stairs", y_bump: 0.5, inherits_rotation: true }
-            ]
-        },
-        DRESSING : {
+        DRESSING : { // Planned Use in Set Dressing Feature
             low_spawn : [
                 {key: "Mushroom Patch (Forest) 01", Id: "efc30073-0bc0-4380-9da5-27fcaa16c02f"},
                 {key: "Root 02",Id: "db207ea0-97f0-4c43-88c5-8fa0c78801a5"}
@@ -61,33 +38,39 @@ const tileSets =  {
             solid_block: "239dad98-4a2e-4460-9c01-401a58431f14", 
             stairs : "b7bfe16c-8731-424b-a880-5c0e09280bf8"
         },
-        PREFABS : { 
-            "Door_Prefab": [ 
-                { key: "floor", y_bump: 0.0, inherits_rotation: false },
-                { key: "door", y_bump: 0.5, inherits_rotation: true, N: {z : 0.5} , E: {x : -0.5} } 
-            ], 
-            "Portcullis_Prefab": [ 
-                { key: "floor", y_bump: 0.0, inherits_rotation: false },
-                { key: "portcullis", y_bump: 0.5, inherits_rotation: true, N: {z : 0.5} , E: {x : -0.5} } 
-            ],
-            "Solid_Prefab": [ 
-                { key: "floor", y_bump: 0.0, inherits_rotation: false },
-                { key: "solid_block", y_bump: 0.5, inherits_rotation: false },
-                { key: "solid_block", y_bump: 1.5, inherits_rotation: false }
-            ],
-            "outer_corner_Prefab": [ 
-            { key: "floor", y_bump: 0.0, inherits_rotation: false },
-            { key: "outer_corner", y_bump: 0.5, inherits_rotation: true, NE: {x : -0.5, z : 0.5}, SE: {x : -0.5}, NW: {z: 0.5} }
-            ],
-            "Stairs_Prefab": [ 
-            { key: "floor", y_bump: 0.0, inherits_rotation: false },
-            { key: "stairs", y_bump: 0.5, inherits_rotation: true }
-            ]
-        },
     }
 }
 
-let { ASSET_IDS, PREFABS, EXTENDS } = tileSets.MegaDungeon; // New Line
+const DEFAULT_PREFABS = {
+    "Door_Prefab": [
+        { key: "door", y_bump: 0.5, inherits_rotation: true, N: {z : 0.5} , E: {x : -0.5} }
+    ],
+    "Portcullis_Prefab": [
+        { key: "portcullis", y_bump: 0.5, inherits_rotation: true, N: {z : 0.5} , E: {x : -0.5} }
+    ],
+    "Solid_Prefab": [
+        { key: "solid_block", y_bump: 0.5, inherits_rotation: false },
+        { key: "solid_block", y_bump: 1.5, inherits_rotation: false }
+    ],
+    "outer_corner_Prefab": [
+        // SW is the asset's default position, so it needs no offset entry
+        { key: "outer_corner", y_bump: 0.5, inherits_rotation: true, NE: {x : -0.5, z : 0.5}, SE: {x : -0.5}, NW: {z: 0.5} }
+    ],
+    "Stairs_Prefab": [
+        { key: "stairs", y_bump: 0.5, inherits_rotation: true }
+    ]
+};
+
+let ASSET_IDS, PREFABS, EXTENDS;
+
+function applyTileSet(name) {
+    const selectedData = tileSets[name];
+    ASSET_IDS = selectedData.ASSET_IDS;
+    EXTENDS = selectedData.EXTENDS;
+    PREFABS = { ...DEFAULT_PREFABS, ...selectedData.PREFABS }; // The theme's versions win
+}
+
+applyTileSet('MegaDungeon');
 
 document.addEventListener('DOMContentLoaded', () => {
   const dropdown = document.getElementById('tileSetDropdown');
@@ -109,8 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // 4. Optional: Add the event listener for when the user changes the dropdown
   dropdown.addEventListener('change', (event) => {
     const selectedName = event.target.value;
-    const selectedData = tileSets[selectedName];
-    ({ ASSET_IDS, PREFABS, EXTENDS } = selectedData); // New Line
-    console.log(`You selected ${selectedName}`, selectedData);
+    applyTileSet(selectedName);
+    console.log(`You selected ${selectedName}`, tileSets[selectedName]);
   });
 });

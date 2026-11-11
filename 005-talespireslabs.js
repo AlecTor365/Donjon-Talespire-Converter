@@ -44,9 +44,26 @@ const TalespireSlabs = (() => {
     //    - 20 bytes per layout: 16B GUID + 2B asset count + 2B struct alignment padding
     //    - 28 bytes per asset:  12B center + 12B extents + 1B signed rotation + 3B padding
     //    - 28 bytes: Overall slab bounding box (12B union center + 12B union extents + 4B padding)
+    //    Counts are stored in 2 bytes (max 65,535) and rotation in 1 signed byte (-128 to 127).
+    //    Anything outside those ranges would silently wrap around and corrupt the slab, so stop instead.
+    const MAX_COUNT = 65535;
+    if (layouts.length > MAX_COUNT) {
+      throw new Error(`Too many asset types for one slab: ${layouts.length} (max ${MAX_COUNT}).`);
+    }
+
     let totalAssets = 0;
     for (let i = 0; i < layouts.length; i++) {
-      totalAssets += layouts[i].assets.length;
+      const assets = layouts[i].assets;
+      if (assets.length > MAX_COUNT) {
+        throw new Error(`Too many copies of asset ${layouts[i].nguid}: ${assets.length} (max ${MAX_COUNT}).`);
+      }
+      for (let j = 0; j < assets.length; j++) {
+        const rotation = assets[j].rotation;
+        if (!Number.isInteger(rotation) || rotation < -128 || rotation > 127) {
+          throw new Error(`Invalid rotation ${rotation} on asset ${layouts[i].nguid}.`);
+        }
+      }
+      totalAssets += assets.length;
     }
 
     const totalByteLength = 8 + (layouts.length * 20) + (totalAssets * 28) + 28;
@@ -55,7 +72,7 @@ const TalespireSlabs = (() => {
     let ptr = 0;
 
     // 2. Write 8-byte Header (all values little-endian)
-    view.setUint32(ptr, 0xD1CEFACE, true)
+    view.setUint32(ptr, 0xD1CEFACE, true);
     ptr += 4;
     view.setUint16(ptr, 1, true);          // Slab format version 1
     ptr += 2;

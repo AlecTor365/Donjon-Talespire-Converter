@@ -1,8 +1,6 @@
 // ==========================================
 // DONJON BITMASK CONSTANTS
 // ==========================================
-const FLAG_NOTHING = 0;
-const FLAG_BLOCK = 1;            // Solid Earth / Deep Rock
 const FLAG_ROOM = 2;             // Walkable Room
 const FLAG_CORRIDOR = 4;         // Walkable Corridor
 const FLAG_PERIMETER = 16;       // Base Wall
@@ -15,6 +13,11 @@ const FLAG_SECRET = 1048576;     // Secret Door
 const FLAG_PORTCULLIS = 2097152; // Portcullis
 const FLAG_STAIR_DOWN = 4194304; // Stairs Down
 const FLAG_STAIR_UP = 8388608;   // Stairs Up
+const FLAG_NOTHING = 0;          // From Source - Not Used
+const FLAG_BLOCK = 1;            // From Source - Not Used
+const MASK_ROOMID = 65472;       // ROOM ID     - Planned Use in Set Dressing Feature
+const MASK_ASCII = 4278190080;   // ASCII Key   - Not Used
+
 
 // Extracts the primary structural tile type from Donjon's bitmask
 function getTopValue(val) {
@@ -36,7 +39,7 @@ function getTopValue(val) {
     // 3. Structural Boundaries
     if (val & FLAG_PERIMETER) return 'WALL';
     
-    // 4. Default Fallback
+    // 4. Safety Net
     return 'WALL'; 
 }
 
@@ -46,6 +49,10 @@ function getTopValue(val) {
 function isWalkable(type) {
     return ['ROOM', 'CORRIDOR', 'ARCH'].includes(type);
 }
+
+// Cells that get a door-style facing (N or E), and that turn the walls beside them solid.
+// 'ARCH' is left out on purpose: an archway is open floor.
+const DOOR_TYPES = ['DOOR', 'LOCKED', 'TRAPPED', 'SECRET', 'PORTCULLIS', 'STAIRS'];
 
 // ==========================================
 // PASS 1: BASE GEOMETRY SETUP
@@ -60,19 +67,13 @@ function parseMapData(rawMatrix) {
         for (let x = 0; x < cols; x++) {
             const rawVal = rawMatrix[y][x];
             const cellType = getTopValue(rawVal);
-            
-            // Extract the specific room_id if it's a room
-            let roomId = null;
-            if (cellType === 'ROOM') {
-                roomId = rawVal >> 6; 
-            }
 
             parsedGrid[y][x] = {
                 x: x,
                 y: y,
                 raw: rawVal,
                 type: cellType,
-                roomId: roomId,
+                roomId: (rawVal & MASK_ROOMID) >> 6, // Planned Use in Set Dressing Feature
                 corridorScore: 0,      
                 finalAsset: null,      
                 finalFacing: null,     
@@ -86,7 +87,7 @@ function parseMapData(rawMatrix) {
 // ==========================================
 // PASS 2: CORRIDOR LENGTH SCORING
 // ==========================================
-function runFloodFill(parsedGrid) {
+function getCorridorScore(parsedGrid) {
     const rows = parsedGrid.length;
     const cols = parsedGrid[0].length;
 
@@ -151,7 +152,7 @@ function evaluateGeometry(parsedGrid) {
             // -----------------------------------------------------
             // EVALUATE DOORS & PORTCULLISES & STAIRS
             // -----------------------------------------------------
-            let isDoorType = ['DOOR', 'LOCKED', 'TRAPPED', 'SECRET', 'PORTCULLIS', 'STAIRS'].includes(cell.type); // Removed 'ARCH'
+            let isDoorType = DOOR_TYPES.includes(cell.type);
             
             if (isDoorType) {
                 // Check North/South vs East/West passages
@@ -173,10 +174,13 @@ function evaluateGeometry(parsedGrid) {
                 continue;
             }
 
-            // New check: If any neighbor is a door type, set as solid_block
+            // Doors are handled above, so anything that isn't a Wall needs no geometry evaluation
+            if (cell.type !== 'WALL') continue;
+
+            // If any neighbor is a door type, this wall becomes a solid_block
             let nearDoor = orthogonals.some(dir => {
                 let ny = y + dir.dy, nx = x + dir.dx;
-                return ny >= 0 && ny < rows && nx >= 0 && nx < cols && ['DOOR', 'LOCKED', 'TRAPPED', 'SECRET', 'PORTCULLIS', 'STAIRS'].includes(parsedGrid[ny][nx].type);
+                return ny >= 0 && ny < rows && nx >= 0 && nx < cols && DOOR_TYPES.includes(parsedGrid[ny][nx].type);
             });
             if (nearDoor) {
                 cell.finalAsset = "solid_block";
@@ -184,9 +188,6 @@ function evaluateGeometry(parsedGrid) {
                 cell.debugId = "near_door_solid";
                 continue;
             }
-
-            // If it's not a Wall or a Door, skip geometry evaluation
-            if (cell.type !== 'WALL') continue;
 
             // 1. The Orthogonal Sweep
             let walkables = [];
@@ -211,6 +212,10 @@ function evaluateGeometry(parsedGrid) {
             let orthoCount = walkables.length;
 
             // 2. The Logic Gates
+            // Wall tiles are half wall, half floor. finalFacing is the half the wall sits on
+            // (the debugger arrow points at it), so the floor half faces the open side.
+            // When a wall has open space on both sides, the floor half goes to the corridor
+            // first (making corridors wider), then to the room.
             switch (orthoCount) {
                 
                 case 0: // DEEP EARTH OR INNER CORNERS
@@ -270,7 +275,7 @@ function evaluateGeometry(parsedGrid) {
                         else if (w1.cell.type === 'ROOM' || w2.cell.type === 'ROOM') {
                             cell.finalAsset = "wall_straight";
                             cell.finalFacing = (w1.cell.type === 'ROOM') ? w1.dir.name : w2.dir.name; 
-                            cell.debugId = "2W_opp_RmCor_winRoom";
+                            cell.debugId = "2W_opp_RmCor_winCor";
                         } 
                         else {
                             // Corridor vs Corridor: Length Score Battle
@@ -315,7 +320,7 @@ function evaluateGeometry(parsedGrid) {
 // ==========================================
 function processDungeonMap(rawMatrix) {
     let grid = parseMapData(rawMatrix);      // Pass 1
-    grid = runFloodFill(grid);               // Pass 2
+    grid = getCorridorScore(grid);           // Pass 2
     grid = evaluateGeometry(grid);           // Pass 3
     return grid;
 }

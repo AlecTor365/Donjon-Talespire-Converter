@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Donjon to TaleSpire Converter</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <h1>Donjon to TaleSpire Converter</h1>
+
+    <label for="jsonFileInput">Donjon JSON file:</label>
+    <input type="file" id="jsonFileInput" accept=".json, .txt">
+    <button id="generateButton">Generate TaleSpire Slab</button>
+
+    <label for="tileSetDropdown">Select TileSet:</label>
+    <select id="tileSetDropdown">
+    </select>
+
+    <!-- Both output boxes sit side by side, with the dungeon map below them -->
+    <div class="output-row">
+        <div class="output-panel">
+            <h3><label for="outputArea">Your TaleSpire String:</label></h3>
+            <textarea id="outputArea" rows="10" readonly placeholder="Your generated string will appear here..."></textarea>
+            <p id="sizeWarning" class="warning" hidden></p>
+        </div>
+
+        <div class="output-panel">
+            <h3><label for="rawOutputArea">Slab Builder Raw Output:</label></h3>
+            <textarea id="rawOutputArea" rows="10" readonly placeholder="The Raw Output will appear here..."></textarea>
+        </div>
+    </div>
+
+    <div id="mapGrid"></div>
+
+    <script src="https://cdn.jsdelivr.net/pako/1.0.3/pako.min.js"></script>
+
+
+    <script src="001-main.js"></script>
+    <script src="002-donjonParser.js"></script>
+    <script src="003-themePicker.js"></script>
+    <script src="004-slabBuilder.js"></script>
+    <script src="005-talespireslabs.js"></script>
+
+</body>
+</html>
