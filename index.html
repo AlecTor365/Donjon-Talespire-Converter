@@ -10,18 +10,61 @@
 
     <h1>Donjon to TaleSpire Converter</h1>
 
-    <label for="jsonFileInput">Donjon JSON file:</label>
-    <input type="file" id="jsonFileInput" accept=".json, .txt">
-    <button id="generateButton">Generate TaleSpire Slab</button>
+    <!-- Main controls on the left, the Cleanup group on the right -->
+    <div class="top-area">
+        <div class="main-controls">
+            <!-- Row 1: pick the file and generate -->
+            <div class="control-row">
+                <label for="jsonFileInput">Donjon JSON file:</label>
+                <input type="file" id="jsonFileInput" accept=".json, .txt">
+                <button id="generateButton">Generate TaleSpire Slab</button>
+            </div>
 
-    <label for="tileSetDropdown">Select TileSet:</label>
-    <select id="tileSetDropdown">
-    </select>
+            <!-- Row 2: options -->
+            <div class="control-row">
+                <label for="tileSetDropdown">Select TileSet:</label>
+                <select id="tileSetDropdown">
+                </select>
+
+                <label class="checkbox-label" for="bigModeToggle">
+                    <input type="checkbox" id="bigModeToggle">
+                    Big Mode (10 ft cells)
+                </label>
+            </div>
+        </div>
+
+        <!-- Cleanup options (see 003-cleanUp.js and 007-slabSplitter.js). New cleanup options go here too. -->
+        <fieldset class="cleanup-panel">
+            <legend>Cleanup</legend>
+            <label class="checkbox-label" for="trimToggle">
+                <input type="checkbox" id="trimToggle" checked>
+                Trim Excess
+            </label>
+            <label class="checkbox-label" for="mergeToggle">
+                <input type="checkbox" id="mergeToggle" checked>
+                Merge Floors &amp; Walls
+            </label>
+            <label class="checkbox-label" for="ringToggle">
+                <input type="checkbox" id="ringToggle">
+                Outer Ring
+            </label>
+            <label class="checkbox-label" for="splitToggle">
+                <input type="checkbox" id="splitToggle">
+                Split Dungeon
+            </label>
+        </fieldset>
+    </div>
 
     <!-- Both output boxes sit side by side, with the dungeon map below them -->
     <div class="output-row">
         <div class="output-panel">
-            <h3><label for="outputArea">Your TaleSpire String:</label></h3>
+            <div class="panel-heading">
+                <h3><label for="outputArea">Your TaleSpire String:</label></h3>
+                <button id="copyButton" disabled>Copy String</button>
+                <span id="copyStatus" class="copy-status" aria-live="polite"></span>
+            </div>
+            <!-- One tab per part when the dungeon is split; the selected part is tinted in the map below -->
+            <div id="partTabs" class="part-tabs" role="tablist" hidden></div>
             <textarea id="outputArea" rows="10" readonly placeholder="Your generated string will appear here..."></textarea>
             <p id="sizeWarning" class="warning" hidden></p>
         </div>
@@ -39,9 +82,11 @@
 
     <script src="001-main.js"></script>
     <script src="002-donjonParser.js"></script>
-    <script src="003-themePicker.js"></script>
-    <script src="004-slabBuilder.js"></script>
-    <script src="005-talespireslabs.js"></script>
+    <script src="003-cleanUp.js"></script>
+    <script src="004-themePicker.js"></script>
+    <script src="005-slabBuilder.js"></script>
+    <script src="006-talespireslabs.js"></script>
+    <script src="007-slabSplitter.js"></script>
 
 </body>
 </html>

@@ -1,6 +1,4 @@
-// Strings longer than this get an on-screen warning. TaleSpire's real paste limit is unknown:
-// Crypts (about 3,500 characters) pastes and Gauntlet (about 62,500) does not.
-// 30,000 is a guess, so adjust it once the real limit is found.
+// Strings longer than this get an on-screen warning. TaleSpire's paste limit is 30 kB.
 const SIZE_WARNING_CHARS = 30000;
 
 // Empties every output so a failed run never leaves an older dungeon's results on screen
@@ -11,7 +9,96 @@ function clearOutputs() {
     const sizeWarning = document.getElementById('sizeWarning');
     sizeWarning.textContent = '';
     sizeWarning.hidden = true;
+    document.getElementById('copyButton').disabled = true;
+    document.getElementById('copyStatus').textContent = '';
+    const partTabs = document.getElementById('partTabs');
+    partTabs.innerHTML = '';
+    partTabs.hidden = true;
+    currentParts = [];
 }
+
+// Outer Ring only applies while Trim Excess is on
+function updateCleanupOptions() {
+    document.getElementById('ringToggle').disabled = !document.getElementById('trimToggle').checked;
+}
+document.getElementById('trimToggle').addEventListener('change', updateCleanupOptions);
+updateCleanupOptions();
+
+// ==========================================
+// PART TABS (Split Dungeon)
+// ==========================================
+// Every result is a list of parts: one part normally, several when the dungeon is split.
+// Each part: { name, x0, x1, y0, y1 (map cells), slab, string }.
+let currentParts = [];
+let debuggerCols = 0;
+
+function showParts(parts) {
+    currentParts = parts;
+    const partTabs = document.getElementById('partTabs');
+    partTabs.innerHTML = '';
+    partTabs.hidden = parts.length < 2;
+    if (parts.length > 1) {
+        parts.forEach((part, index) => {
+            const tab = document.createElement('button');
+            tab.className = 'part-tab';
+            tab.setAttribute('role', 'tab');
+            tab.textContent = `${index + 1}. ${part.name} (${part.string.length.toLocaleString()})`;
+            tab.addEventListener('click', () => showPart(index));
+            partTabs.appendChild(tab);
+        });
+    }
+    showPart(0);
+}
+
+// Shows one part's string and raw output, and tints its area in the debugger (only when split)
+function showPart(index) {
+    const part = currentParts[index];
+    if (!part) return;
+    document.getElementById('outputArea').value = part.string;
+    document.getElementById('rawOutputArea').value = JSON.stringify(part.slab, null, 2);
+    document.getElementById('copyButton').disabled = false;
+    document.getElementById('copyStatus').textContent = '';
+
+    const sizeWarning = document.getElementById('sizeWarning');
+    sizeWarning.textContent = '';
+    sizeWarning.hidden = true;
+    showSizeWarning(part.string.length);
+
+    document.querySelectorAll('#partTabs .part-tab').forEach((tab, i) => {
+        tab.classList.toggle('active', i === index);
+        tab.setAttribute('aria-selected', i === index);
+    });
+
+    const cells = document.getElementById('mapGrid').children;
+    for (let i = 0; i < cells.length; i++) {
+        const x = i % debuggerCols, y = Math.floor(i / debuggerCols);
+        const inPart = currentParts.length > 1 && x >= part.x0 && x < part.x1 && y >= part.y0 && y < part.y1;
+        cells[i].classList.toggle('part-active', inPart);
+    }
+}
+
+// ==========================================
+// COPY BUTTON
+// ==========================================
+// Copies the whole TaleSpire string to the clipboard in one click
+async function copyString() {
+    const outputArea = document.getElementById('outputArea');
+    const copyStatus = document.getElementById('copyStatus');
+    if (!outputArea.value) return;
+
+    try {
+        await navigator.clipboard.writeText(outputArea.value);
+        copyStatus.textContent = 'Copied!';
+    } catch (error) {
+        // Some browsers block the clipboard for pages opened from a file, so fall back to the older copy command
+        outputArea.select();
+        const copied = document.execCommand('copy');
+        copyStatus.textContent = copied ? 'Copied!' : 'Copy failed: click the box, press Ctrl+A, then Ctrl+C';
+    }
+    setTimeout(() => { copyStatus.textContent = ''; }, 2500);
+}
+
+document.getElementById('copyButton').addEventListener('click', copyString);
 
 function showSizeWarning(length) {
     if (length <= SIZE_WARNING_CHARS) return;
@@ -56,26 +143,65 @@ document.getElementById('generateButton').addEventListener('click', () => {
             console.log("-> Parsing complete. Blueprint generated.");
 
             // ---------------------------------------------------
-            console.log("3. Rendering HTML Debugger...");
+            if (document.getElementById('trimToggle').checked) {
+                console.log("3. Trimming the grid (003-cleanUp.js)...");
+                const keepOuterRing = document.getElementById('ringToggle').checked;
+                const trimmedCount = gridTrim(parsedGrid, keepOuterRing);
+                console.log(`-> Trimmed ${trimmedCount} cells of rock outside the dungeon${keepOuterRing ? ' (outer ring kept as plain floor)' : ''}.`);
+            } else {
+                console.log("3. Trimming skipped (checkbox is off).");
+            }
+
+            // ---------------------------------------------------
+            console.log("4. Rendering HTML Debugger...");
             renderDebuggerGrid(parsedGrid);
             console.log("-> Visual debugger drawn to screen.");
 
             // ---------------------------------------------------
-            console.log("4. Building 3D Slab Data (004-slabBuilder.js)...");
-            const slabData = buildSlabFromGrid(parsedGrid);
-            console.log(`-> Slab Built! Total unique asset groups generated: ${slabData.length}`);
+            // Steps 5 and 6 together: building and encoding. When merging, the 2x2 floor grid is tried
+            // from all four starting positions and the shortest string is kept.
+            let slabData, base64String;
+            let gridParity = null;   // which cell lines the merged 2x2 floor grid uses, so splits follow it
+            const bigMode = document.getElementById('bigModeToggle').checked;
+            if (bigMode) {
+                console.log("5-6. Building Big Mode slab (005-slabBuilder.js) and encoding (006-talespireslabs.js)...");
+                slabData = buildBigSlabFromGrid(parsedGrid);
+                base64String = TalespireSlabs.CreateSlab(slabData);
+            } else if (document.getElementById('mergeToggle').checked) {
+                console.log("5-6. Building merged slab (005-slabBuilder.js) and encoding (006-talespireslabs.js)...");
+                for (const [shiftX, shiftY] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+                    const candidateSlab = buildMergedSlabFromGrid(parsedGrid, shiftX, shiftY);
+                    const candidateString = TalespireSlabs.CreateSlab(candidateSlab);
+                    const assets = candidateSlab.reduce((sum, group) => sum + group.assets.length, 0);
+                    console.log(`   grid shift (${shiftX}, ${shiftY}): ${assets} assets, ${candidateString.length} characters`);
+                    if (!base64String || candidateString.length < base64String.length) {
+                        slabData = candidateSlab;
+                        base64String = candidateString;
+                        gridParity = { x: shiftX, y: shiftY };
+                    }
+                }
+            } else {
+                console.log("5-6. Building slab (005-slabBuilder.js) and encoding (006-talespireslabs.js)...");
+                slabData = buildSlabFromGrid(parsedGrid);
+                base64String = TalespireSlabs.CreateSlab(slabData);
+            }
+            const totalAssets = slabData.reduce((sum, group) => sum + group.assets.length, 0);
+            console.log(`-> Done! ${totalAssets} assets in ${slabData.length} asset groups, ${base64String.length} characters.`);
 
             // ---------------------------------------------------
-            console.log("5. Encoding TaleSpire String (005-talespireslabs.js)...");
-            const base64String = TalespireSlabs.CreateSlab(slabData);
-            console.log("-> Encoding complete!");
+            // Split Dungeon: only splits when the string is too long; each part fits on its own
+            const cols = parsedGrid[0].length, rows = parsedGrid.length;
+            let parts = [{ name: 'Whole dungeon', x0: 0, x1: cols, y0: 0, y1: rows, slab: slabData, string: base64String }];
+            if (document.getElementById('splitToggle').checked && base64String.length > SIZE_WARNING_CHARS) {
+                console.log("6b. Splitting the dungeon (007-slabSplitter.js)...");
+                parts = splitSlab(slabData, cols, rows, bigMode ? 2 : 1, gridParity, SIZE_WARNING_CHARS);
+                console.log(`-> Split into ${parts.length} parts: ` + parts.map(p => `${p.name} ${p.string.length} characters`).join(', '));
+            }
 
             // ---------------------------------------------------
             // Both boxes are filled only after encoding succeeds, so they always show the same dungeon
-            console.log("6. Outputting to text area...");
-            document.getElementById('rawOutputArea').value = JSON.stringify(slabData, null, 2);
-            document.getElementById('outputArea').value = base64String;
-            showSizeWarning(base64String.length);
+            console.log("7. Outputting to text area...");
+            showParts(parts);
 
             console.log("SUCCESS! Process finished flawlessly.");
             console.log("==========================================");
@@ -100,7 +226,8 @@ function renderDebuggerGrid(parsedGrid) {
     
     const rows = parsedGrid.length;
     const cols = parsedGrid[0].length;
-    
+    debuggerCols = cols;   // used by showPart to find each cell's position for the part tint
+
     // Set dynamic columns based on map width
     gridContainer.style.gridTemplateColumns = `repeat(${cols}, 20px)`;
 
@@ -110,11 +237,11 @@ function renderDebuggerGrid(parsedGrid) {
             
             let cellDiv = document.createElement('div');
             // Use cell type for color coding
-            cellDiv.className = `cell ${cell.type.toLowerCase()}`;
+            cellDiv.className = `cell ${cell.type.toLowerCase()}${cell.isTrimmed ? ' trimmed' : ''}${cell.isRing ? ' ring' : ''}`;
             
             // Tooltip loaded with our Parser logic
             // Cells without an asset or facing (floors, doors) show a dash instead of "null"
-            cellDiv.title = `(${x},${y})\nType: ${cell.type}\nAsset: ${cell.finalAsset ?? '-'}\nFacing: ${cell.finalFacing ?? '-'}\nDebug: ${cell.debugId}\nScore: ${cell.corridorScore}`;
+            cellDiv.title = `(${x},${y})\nType: ${cell.type}\nAsset: ${cell.finalAsset ?? '-'}\nFacing: ${cell.finalFacing ?? '-'}\nDebug: ${cell.debugId}\nScore: ${cell.corridorScore}${cell.isTrimmed ? '\nTrimmed: no assets placed' : ''}${cell.isRing ? '\nOuter ring: one plain floor' : ''}`;
 
             // Create Facing Arrow
             if (cell.finalFacing && cell.finalFacing !== 'None') {

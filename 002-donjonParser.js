@@ -77,7 +77,9 @@ function parseMapData(rawMatrix) {
                 corridorScore: 0,      
                 finalAsset: null,      
                 finalFacing: null,     
-                debugId: "unprocessed"
+                debugId: "unprocessed",
+                isTrimmed: false,      // Set by gridTrim in 003-cleanUp.js
+                isRing: false          // Set by gridTrim when "Outer Ring" keeps an edge cell as a plain floor
             };
         }
     }

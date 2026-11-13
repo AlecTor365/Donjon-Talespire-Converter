@@ -23,6 +23,96 @@ textarea {
     margin-bottom: 20px;
 }
 
+/* Top of the page: main controls on the left, the Cleanup group on the right */
+.top-area {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 20px;
+    margin-bottom: 10px;
+}
+
+.cleanup-panel {
+    border: 1px solid #555;
+    padding: 8px 16px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 200px;
+}
+
+.cleanup-panel legend {
+    padding: 0 6px;
+    color: #cccccc;
+}
+
+.cleanup-panel .checkbox-label {
+    margin-left: 0;
+}
+
+/* Greyed out when it can't apply (Outer Ring needs Trim Excess) */
+.checkbox-label:has(input:disabled) {
+    opacity: 0.45;
+    cursor: default;
+}
+
+/* Part tabs above the TaleSpire string when the dungeon is split */
+.part-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 8px;
+}
+
+.part-tabs[hidden] {
+    display: none;
+}
+
+.part-tab {
+    background-color: #1a1a1a;
+    color: #cccccc;
+    border: 1px solid #555;
+    padding: 4px 10px;
+    cursor: pointer;
+}
+
+.part-tab.active {
+    background-color: #5a9fe0;
+    border-color: #5a9fe0;
+    color: #1a1a1a;
+    font-weight: bold;
+}
+
+/* Control rows at the top: file + generate, then tile set + Big Mode */
+.control-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    margin-bottom: 10px;
+}
+
+.checkbox-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: 12px;
+    cursor: pointer;
+}
+
+/* Heading with the copy button beside it */
+.panel-heading {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.copy-status {
+    color: #a8d5ba;
+    font-size: 0.9em;
+}
+
 /* Output boxes side by side. On a narrow window the second box wraps underneath the first */
 .output-row {
     display: flex;
@@ -71,6 +161,9 @@ textarea {
 .door, .locked, .trapped, .secret { background-color: #f3c25b; }
 .portcullis, .arch { background-color: #a3c4d1; }
 .stairs { background-color: #c7a8e0; }
+.cell.trimmed { background-color: #1a1a1a; } /* Left out by gridTrim: no assets placed */
+.cell.ring { background-color: #5c5c5c; }    /* Outer Ring: one plain floor */
+.cell.part-active { box-shadow: inset 0 0 0 20px rgba(90, 159, 224, 0.5); } /* Tint for the selected part tab */
 
 /* The Arrow Rotations */
 .arrow {
